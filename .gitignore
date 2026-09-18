@@ -1,0 +1,29 @@
+# ★API 키·출입증은 절대 올리지 않는다
+keys/
+*.key
+.volcano_runner_key.json
+
+# 소재·완성본·중간물 (용량) — 동봉 자산(글꼴·얼굴 모델·효과음·로고)만 예외
+*.mp4
+*.mkv
+*.webm
+*.mp3
+*.m4a
+*.wav
+!rama_work/LLJtlSPtAMU/sfx/*.wav
+*.png
+*.jpg
+!rama_work/assets/logos/*.png
+!rama_work/examples/*/logo.png
+*.ass
+__pycache__/
+*.pyc
+
+# 편 작업 폴더에서 생기는 것
+rama_work/*/src.mp4
+rama_work/*/_src/
+rama_work/*/narr/
+rama_work/*/_cuts/
+rama_work/*/fonts/
+!rama_work/fonts/
+rama_work/라마/
