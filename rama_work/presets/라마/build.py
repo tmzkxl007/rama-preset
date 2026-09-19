@@ -594,7 +594,7 @@ for _r in rows:
     if _r["kind"] != "N":
         continue
     _nt = _r["text"].replace("|", "")
-    if re.search(r"기에|기에 ", _nt) or _nt.endswith("기에"):
+    if re.search(r"(?<![여거저])기에(\s|$)", _nt):   # "여기에·거기에" 는 어미가 아니다(2026-09-19 sb05 오탐)
         WARN.append(f"나레 '{_nt}' 에 `~기에` 어미 — 부록 M-2, ~죠/~는데 로 바꿔라")
     for _w in _M_TITLE:
         if re.search(r"(^|\s)\S*" + _w + r"(\s|$|이|은|는|의|에게|을|를|과|와|도|님)", _nt):
@@ -694,10 +694,26 @@ def probe(name, size, text, align, w=None):
     return (ys[0], ys[-1], ys[-1] - ys[0] + 1, xs[-1] - xs[0] + 1)
 
 
+_FIX = getattr(spec, "FIXED_SIZES", None) or {}
+_FIXKEY = {"제목 1행": "H1", "제목 2행": "H2", "나레 자막": "NARR", "대사 자막": "DLG", "대사 1행": "DLG",
+           "대사 2행": "DLG", "효과자막": "EFF", "작품명": "CREDIT", "풀영상 안내": "CREDIT2"}
+
+
 def fit(name, text, target_h, maxw, align, what):
     """잉크 높이를 target_h 에 맞추고, 그래도 폭이 넘치면 줄인다.
     -> (글자크기, \\pos 에 넣을 y 보정값)"""
     probe_txt = text.replace(NL, " ")
+    # ★spec.FIXED_SIZES 가 있으면 크기를 거기 값으로 못 박고, 폭이 넘치면 [규격 위반] 만 찍는다(줄이지 않는다).
+    #   (2026-09-19 사용자 "템플릿 크기 좀 고정해봐, 유튜브에 올리면 다 제각각이야")
+    if _FIXKEY.get(what) in _FIX:
+        size = int(_FIX[_FIXKEY[what]])
+        t, b, ih, iw = probe(name, size, probe_txt, align, w=4000)
+        if iw > maxw:
+            print(f"  ★[규격 위반] {what} '{probe_txt}' 이 {iw}px 라 {maxw}px 을 넘는다 — 크기는 고정이니 문구를 줄여라")
+        t2, b2, ih2, _w2 = probe(name, size, text, align)
+        off = (t2 - PROBE_Y) if align == 8 else ((t2 + b2) / 2.0 - PROBE_Y)
+        print(f"  {what} 크기 {size}(고정) · 잉크높이 {ih} · 자리보정 {-off:+.0f}px")
+        return size, -off
     lo, hi = 30, 400
     for _ in range(12):
         mid = (lo + hi) // 2

@@ -116,6 +116,11 @@ SFX_DIFF_MIN = 12           # 그래도 이보다 작으면 안 깐다 (거의 �
 # ── 글꼴 ────────────────────────────────────────────────
 # ★사용자 지시: 대사 = 그리운 코코초이툰 · 나레 = 도현체
 #   (산돌 네모니2 는 유료 산돌구름 글꼴이라 못 넣는다 — 사용자가 코코초이툰으로 바꿨다)
+# ★템플릿 크기 고정 (2026-09-19 사용자 "템플릿 크기 좀 고정해봐, 유튜브에 올리면 다 제각각이야")
+#   글자 크기는 문구마다 잉크높이로 다시 재지 않고 **아래 값으로 못 박는다.** 폭이 넘치면 줄이지 않고 [규격 위반] — 문구를 줄여라.
+#   그림은 reframe 이 얼굴을 키우려고 크롭을 좁히지 않는다(REFRAME_ZOOM=False) — 옆으로 옮기기만. 컷마다 배율이 달라 보이던 것을 없앤다.
+FIXED_SIZES = dict(H1=105, H2=156, NARR=78, DLG=78, EFF=74, CREDIT=59, CREDIT2=59)
+REFRAME_ZOOM = False
 FONT_HEAD = "Jalnan 2 TTF"              # ★라마: 여기어때 잘난체 2 (fonts/Jalnan2TTF.ttf 동봉). 참고 영상 제목 글꼴과 같은 계열
 FONT_NARR = "Gmarket Sans Bold"         # ★라마: 나레·대사 둘 다 Gmarket Sans Bold (fonts/GmarketSansBold.ttf 동봉, family 이름을 넣어 둔 판)
 FONT_DLG = "Gmarket Sans Bold"

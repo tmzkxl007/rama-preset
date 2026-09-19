@@ -186,6 +186,8 @@ for (t0, t1) in pieces:
     # ★너무 좁게 자르면 1080 으로 늘릴 때 뭉갠다. 크롭폭은 기본의 60% 아래로 안 내린다.
     w = max(w, CW0 * 0.60)
     w = min(w, SW, SH * AR, CW0)
+    if not getattr(spec, "REFRAME_ZOOM", True):
+        w = float(CW0)          # ★라마: 배율 고정 — 옆으로 옮기기만 한다(2026-09-19 사용자 "템플릿 크기 고정")
     h = w / AR
     px = (xl + xr) / 2.0
     if anchor is not None:
