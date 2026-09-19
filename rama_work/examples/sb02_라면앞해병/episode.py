@@ -34,8 +34,8 @@ spec.TTS_TEMPO = 1.3
 SRC = "src.mp4"
 OUT = "sb02_ramen_marine.mp4"
 
-HEAD1 = "라면 앞에서 눈동자 흔들린"
-HEAD2 = "해병대 이병 최욱"
+HEAD1 = "라면 앞에서 흔들린"
+HEAD2 = "해병 이병 최욱"
 WORK = "신병4 사보타주"
 PLATFORM = "티빙"
 

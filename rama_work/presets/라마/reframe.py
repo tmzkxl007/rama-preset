@@ -69,8 +69,9 @@ if not used:
     sys.exit("쓰는 구간이 없다")
 
 # ── shot 경계 ─────────────────────────────────────────────
+# ★라마(2026-09-19): 문턱 0.28 은 텐트 안 같은 비슷한 shot 전환을 놓쳐 한 조각에 여러 구도가 섞였다 → 0.20
 out = subprocess.run(["ffmpeg", "-v", "error", "-i", SRC, "-filter_complex",
-                      "select='gt(scene,0.28)',metadata=print:file=-", "-f", "null", "-"],
+                      "select='gt(scene,0.20)',metadata=print:file=-", "-f", "null", "-"],
                      capture_output=True, text=True, encoding="utf-8", errors="replace")
 bounds = sorted(float(m) for m in re.findall(r"pts_time:([0-9.]+)", out.stdout + out.stderr))
 DUR = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -137,7 +138,9 @@ for (t0, t1) in pieces:
         continue
     # ★샘플의 절반도 못 잡았으면 믿지 않는다.
     #   벽에 붙은 사진·배경 사람 하나를 얼굴로 잡고 화면을 통째로 옮긴 사고가 있었다(§17-17).
-    if len(frames) < nsamp * 0.5:
+    # ★라마(2026-09-19): 헬멧·위장 크림 얼굴은 검출이 절반 아래로 떨어진다. 30% 만 잡혀도 쓴다 —
+    #   대신 아래에서 큰 얼굴만 남기고, 옮길 값이 작으면 그대로 둔다.
+    if len(frames) < nsamp * 0.3:
         REPORT.append((t0, t1, None, f"얼굴이 {len(frames)}/{nsamp} 프레임에서만 잡힘 — 못 믿어서 그대로 둔다"))
         continue
     B = np.array([[f[0], f[1], f[2], f[3]] for f in boxes], dtype=float)
@@ -155,7 +158,10 @@ for (t0, t1) in pieces:
     ycen = float(np.median(keep[:, 1] + keep[:, 3] * 0.5))
 
     # 지금 크롭(가운데 고정)으로 충분한가?
-    ok_in = (xl >= CX0 + CW0 * 0.02) and (xr <= CX0 + CW0 * 0.98)
+    # ★라마(2026-09-19 사용자 "인물이 오버레이 밖으로 벗어난다"): 8/92 백분위는 shot 안에서 잠깐 가장자리로
+    #   나가는 얼굴을 놓쳤다. 3/97 백분위 + 여백 5% 로 더 엄하게 본다. 0.995:1 이라 포레이로보다 좌우가 좁다.
+    xl3, xr3 = np.percentile(keep[:, 0], 3), np.percentile(keep[:, 0] + keep[:, 2], 97)
+    ok_in = (xl3 >= CX0 + CW0 * 0.05) and (xr3 <= CX0 + CW0 * 0.95)
     ok_big = fw_max >= CW0 * 0.115
     if ok_in and ok_big:
         REPORT.append((t0, t1, None, f"그대로 좋다 (얼굴폭 {fw_max/CW0*100:.0f}%)"))
@@ -166,15 +172,29 @@ for (t0, t1) in pieces:
     w_contain = (xr - xl) + fw_max * 1.1          # 양옆에 얼굴 반쪽씩 여백
     w = max(w_target, w_contain)
     w = min(w, SW, SH * AR, CW0)                  # 기본 크롭보다 넓게는 못 간다
-    if w < w_contain - 1:                         # 다 못 담으면 큰 얼굴 쪽만 담는다
-        big = keep[np.argsort(-keep[:, 2])][:max(1, len(keep) // 2)]
-        xl, xr = np.percentile(big[:, 0], 8), np.percentile(big[:, 0] + big[:, 2], 92)
-        ycen = float(np.median(big[:, 1] + big[:, 3] * 0.5))
+    anchor = None
+    if w < w_contain - 1:
+        # ★다 못 담을 때(2026-09-19 라마 sb03): "큰 얼굴"이 아니라 **원본 화면 가운데 60% 안의 얼굴**을 닻으로 잡는다.
+        #   가장자리에 걸린 큰 얼굴(원본에서도 잘린 사람)에 끌려가 정작 가운데 화자가 잘렸다.
+        #   닻 얼굴은 반드시 담고, 남는 폭만큼 나머지 무리 쪽으로 붙인다.
+        cen = keep[:, 0] + keep[:, 2] * 0.5
+        mid = keep[(cen >= SW * 0.20) & (cen <= SW * 0.80)]
+        if len(mid) == 0:
+            mid = keep[np.argsort(-keep[:, 2])][:max(1, len(keep) // 2)]
+        anchor = (float(np.percentile(mid[:, 0], 8)), float(np.percentile(mid[:, 0] + mid[:, 2], 92)))
+        ycen = float(np.median(mid[:, 1] + mid[:, 3] * 0.5))
     # ★너무 좁게 자르면 1080 으로 늘릴 때 뭉갠다. 크롭폭은 기본의 60% 아래로 안 내린다.
     w = max(w, CW0 * 0.60)
     w = min(w, SW, SH * AR, CW0)
     h = w / AR
     px = (xl + xr) / 2.0
+    if anchor is not None:
+        m = w * 0.04
+        lo, hi = anchor[1] + m - w / 2.0, anchor[0] - m + w / 2.0     # 닻 얼굴이 다 들어오는 px 범위
+        if lo <= hi:
+            px = min(max(px, lo), hi)
+        else:
+            px = (anchor[0] + anchor[1]) / 2.0
     py = ycen + h * 0.10                          # 눈높이를 화면 위쪽 40% 근처로
     px = min(max(px, w / 2.0), SW - w / 2.0)
     # ★★아래끝을 **하드섭 띠 위**로 막는다(2026-09-13에 당했다 — PLAYBOOK §17-30).
@@ -188,7 +208,61 @@ for (t0, t1) in pieces:
     ENTRIES.append([t0, t1, round(px, 1), round(py, 1), round(w / CW0, 4)])
     REPORT.append((t0, t1, ENTRIES[-1], f"얼굴폭 {fw_max/CW0*100:.0f}% → {w/CW0:.2f}배로 다시 잡음"))
 
+# ── ★가장자리 검사 (2026-09-19 라마, 사용자 "인물이 오버레이 밖으로 벗어난다") ──────────
+#   위에서 정한 크롭(그대로 둔 조각은 기본 크롭)으로 잘랐을 때 **큰 얼굴이 잘리는지** 조각마다 다시 본다.
+#   잘리면 그 얼굴이 다 들어오도록 px 를 밀어 준다(폭은 그대로). 두 얼굴이 양끝이라 다 못 담으면
+#   원본 가운데에 가까운 얼굴을 살린다. 헬멧·위장 얼굴은 검출이 드물어 한 프레임만 잡혀도 본다.
+_ent = {(e[0], e[1]): e for e in ENTRIES}
+_fixed = 0
+cap = cv2.VideoCapture(SRC)
+for (t0, t1) in pieces:
+    e = _ent.get((t0, t1))
+    if e:
+        px, py, w = e[2], e[3], e[4] * CW0
+    else:
+        px, py, w = CX0 + CW0 / 2.0, CY0 + CH0 / 2.0, float(CW0)
+    h = w / AR
+    frames, nsamp = scan(t0, t1)
+    # 원본 화면 끝에 이미 걸린 얼굴(뒤통수·어깨너머 앞사람)과 화면 22% 넘는 거대 얼굴은 잘린 게 아니라 구도다 — 뺀다
+    boxes = [f for fr in frames for f in fr
+             if CW0 * 0.12 <= f[2] <= SW * 0.22 and f[0] > 2 and f[0] + f[2] < SW - 2]
+    if not boxes:
+        continue
+    B = np.array([[f[0], f[1], f[2], f[3]] for f in boxes], dtype=float)
+    L, R = px - w / 2.0, px + w / 2.0
+    m = w * 0.03
+    cut = B[(B[:, 0] < L + m) | (B[:, 0] + B[:, 2] > R - m)]
+    if len(cut) == 0:
+        continue
+    # 잘린 얼굴 중 원본 가운데에 가장 가까운 것을 살린다
+    cen = cut[:, 0] + cut[:, 2] * 0.5
+    f = cut[np.argmin(np.abs(cen - SW / 2.0))]
+    fl, fr_ = float(np.percentile(cut[np.abs(cen - cen[np.argmin(np.abs(cen - SW / 2.0))]) < f[2]][:, 0], 10)),               float(np.percentile((cut[:, 0] + cut[:, 2])[np.abs(cen - cen[np.argmin(np.abs(cen - SW / 2.0))]) < f[2]], 90))
+    lo, hi = fr_ + m - w / 2.0, fl - m + w / 2.0
+    if lo > hi:                      # 얼굴이 크롭폭보다 넓다 — 얼굴 가운데로
+        npx = (fl + fr_) / 2.0
+    else:
+        npx = min(max(px, lo), hi)
+    npx = min(max(npx, w / 2.0), SW - w / 2.0)
+    if abs(npx - px) < 4:
+        continue
+    if e:
+        e[2] = round(npx, 1)
+    else:
+        ENTRIES.append([t0, t1, round(npx, 1), round(py, 1), round(w / CW0, 4)])
+    _fixed += 1
+    REPORT.append((t0, t1, ENTRIES[-1] if not e else e, f"가장자리에 잘린 얼굴 → 크롭을 {npx-px:+.0f}px 옮김"))
 cap.release()
+if _fixed:
+    print(f"  ★가장자리 검사: {_fixed}조각의 크롭을 옮겼다")
+ENTRIES.sort()
+# ★같은 shot 안에서 맞붙은 조각끼리 크롭이 다르면 화면이 툭 뛴다 — 앞 조각 값으로 맞춘다(차이가 폭의 25% 안일 때).
+_bset = set(round(b, 2) for b in bounds)
+for i in range(1, len(ENTRIES)):
+    p0, p1 = ENTRIES[i - 1], ENTRIES[i]
+    if abs(p1[0] - p0[1]) <= 0.06 and not any(p0[1] - 0.05 <= b <= p1[0] + 0.05 for b in _bset):
+        if abs(p1[2] - p0[2]) < p1[4] * CW0 * 0.25 and abs(p1[4] - p0[4]) < 0.05:
+            p1[2], p1[3], p1[4] = p0[2], p0[3], p0[4]
 
 json.dump({"src": SRC, "crop0": [CW0, CH0, CX0, CY0], "shots": ENTRIES},
           open("reframe.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)

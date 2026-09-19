@@ -706,10 +706,15 @@ def fit(name, text, target_h, maxw, align, what):
         else:
             hi = mid
     size = max(30, hi)
-    t, b, ih, iw = probe(name, size, probe_txt, align)
+    # ★폭은 넓은 판(w=4000)에 재야 한다 — 1080 판에서는 넘치는 글이 잘려 1080 으로 보이고,
+    #   줄인 크기가 모자라 제목이 화면 밖으로 나갔다(2026-09-19 라마 sb03·sb05, 사용자 "제목이 다 넘어오잖아").
+    t, b, ih, iw = probe(name, size, probe_txt, align, w=4000)
     if iw > maxw and iw > 0:
-        size = max(30, int(size * maxw / iw))
-        t, b, ih, iw = probe(name, size, probe_txt, align)
+        for _ in range(4):
+            size = max(30, int(size * maxw / iw) - 1)
+            t, b, ih, iw = probe(name, size, probe_txt, align, w=4000)
+            if iw <= maxw:
+                break
         print(f"  {what} 폭이 넘쳐 크기를 {size} 로 줄임 (잉크 {iw}px ≤ {maxw})")
     # 여러 줄이면 실제 자막 문구로 다시 재야 자리가 맞는다
     t2, b2, ih2, _w2 = probe(name, size, text, align)

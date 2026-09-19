@@ -28,8 +28,8 @@ spec.TTS_TEMPO = 1.3
 SRC = "src.mp4"
 OUT = "sb05_good_spot.mp4"
 
-HEAD1 = "육군 장교 명당을"
-HEAD2 = "죽기 좋은 자리라는 해병"
+HEAD1 = "육군 장교 명당은"
+HEAD2 = "죽기 좋은 명당"
 WORK = "신병4 사보타주"
 PLATFORM = "티빙"
 

@@ -37,8 +37,8 @@ spec.TTS_TEMPO = 1.3
 SRC = "src.mp4"
 OUT = "sb01_sinbyeong4_report.mp4"
 
-HEAD1 = "보고 하나에 하루 다 가는"
-HEAD2 = "해병대 이병 최욱"
+HEAD1 = "보고 하나에 하루 가는"
+HEAD2 = "해병 이병 최욱"
 WORK = "신병4 사보타주"
 PLATFORM = "티빙"
 

@@ -33,8 +33,8 @@ spec.TTS_TEMPO = 1.3
 SRC = "src.mp4"
 OUT = "sb03_marine_intro.mp4"
 
-HEAD1 = "인사부터 피로 목욕하겠다는"
-HEAD2 = "해병대 상륙기습대대"
+HEAD1 = "피로 목욕하겠다는"
+HEAD2 = "해병대 자기소개"
 WORK = "신병4 사보타주"
 PLATFORM = "티빙"
 
