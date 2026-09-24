@@ -1063,6 +1063,10 @@ for a, b in spk:
     else:
         mrg.append([a, b])
 spk = [(a, b) for a, b in mrg]
+# ★배경음악을 뺀 편은 바닥을 살짝만 올린다(scripts/devocal_src.py 도장)
+_BED = spec.BED_LIFT_DEVOCAL if os.path.exists(os.path.join("_src", "devocal.json")) else spec.BED_LIFT
+if os.path.exists(os.path.join("_src", "devocal.json")):
+    print("  배경음악 제거본 — 목소리 스템만 (BED_LIFT_DEVOCAL)")
 if getattr(spec, "MUTE_UNDER_NARR", False) and spk:
     # ★딱 끊으면 '틱' 하고 튄다. 앞뒤로 R 초에 걸쳐 밀어 내리고 올린다.
     R = spec.MUTE_RAMP
@@ -1071,9 +1075,9 @@ if getattr(spec, "MUTE_UNDER_NARR", False) and spk:
         F = getattr(spec, "MUTE_FLOOR", 0.0)
         gate = f"(1-(1-{F})*clip(min((t-{a:.2f})/{R},({b:.2f}-t)/{R}),0,1))"
         g = f"min({g},{gate})"
-    fc2 = [f"[0:a]{spec.BED_LIFT},volume=volume='{g}':eval=frame[bed]"]
+    fc2 = [f"[0:a]{_BED},volume=volume='{g}':eval=frame[bed]"]
 else:
-    fc2 = [f"[0:a]{spec.BED_LIFT}[bed]"]
+    fc2 = [f"[0:a]{_BED}[bed]"]
 mix = ["[bed]"]
 k = 1
 for r in rows:
