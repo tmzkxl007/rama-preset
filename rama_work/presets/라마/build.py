@@ -768,6 +768,10 @@ def chunks(t, lo, hi):
     # ★숫자·수량 뒤에서 끊으면 "냉동식품 만 / 원어치" 처럼 갈라진다. 붙여 둔다.
     import re as _re
     HOLD = _re.compile(r"(?:[0-9]+|만|천|백|십|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)$")
+    # 뒤 명사·동사와 떼면 안 되는 말(관형사·부정어). 어절이 통째로 이것일 때만 본다
+    MODS = {"제", "그", "이", "저", "내", "네", "우리", "저희", "너희", "이런", "그런", "저런",
+            "어떤", "무슨", "몇", "모든", "온갖", "새", "헌", "옛", "첫", "각", "딴", "다른",
+            "여러", "어느", "웬", "그깟", "이깟", "안", "못"}
     out, cur = [], ""
     ws = t.split()
     for i, w in enumerate(ws):
@@ -775,6 +779,16 @@ def chunks(t, lo, hi):
         too_long = cur and len(cand.replace(" ", "")) > hi
         if too_long and HOLD.search(cur):      # 수량으로 끝나면 한 어절 더 붙인다
             too_long = False
+        if too_long and cur.split()[-1] in MODS:
+            # ★꾸미는 말·부정어로 끝나면 그 말을 다음 덩이로 넘긴다 — "기현을 제 / 집으로" ✗
+            #   "기현을 / 제 집으로" ○ (넷플릭스: 수식어와 명사, 부정어와 동사를 떼지 않는다)
+            head, last = cur.rsplit(" ", 1) if " " in cur else ("", cur)
+            if head:
+                out.append(head)
+                cur = (last + " " + w).strip()
+            else:
+                cur = cand                     # 꾸미는 말 한 어절뿐이면 붙여 둔다
+            continue
         if too_long:
             out.append(cur)
             cur = w
@@ -788,9 +802,22 @@ def chunks(t, lo, hi):
     return out or [t]
 
 
+# ★나레 덩이 글은 narr_align.json 이 정한다 — align.py 가 넷플릭스 규격(0.83초 · 꾸미는 말)에 맞춰
+#   낱말 시각으로 다시 나눴을 수 있다(2026-09-25). 문구가 바뀌어 안 맞으면 chunks() 로 돌아간다.
+_AL = json.load(io.open("narr_align.json", encoding="utf-8")) if os.path.exists("narr_align.json") else {}
+
+
+def narr_chunks(text, n):
+    rec = _AL.get(f"n{n}")
+    _nm = lambda x: re.sub(r"[^가-힣0-9A-Za-z]", "", x)
+    if rec and _nm("".join(x[0] for x in rec)) == _nm(text):
+        return [x[0] for x in rec], rec
+    return chunks(text, *spec.NARR_CHUNK), None
+
+
 dlg_caps = [wrap(dtext(r["text"]), spec.WRAP_DLG) for r in rows if r["kind"] == "D"]
-narr_bits = [c for r in rows if r["kind"] == "N"
-             for c in chunks(r["text"], *spec.NARR_CHUNK)]
+narr_bits = [c for n, r in enumerate([r for r in rows if r["kind"] == "N"], 1)
+             for c in narr_chunks(r["text"], n)[0]]
 dlg_line = max((p for t in dlg_caps for p in t.split(NL)), key=len, default="가나다라마바사아자")
 narr_line = max(narr_bits, key=len, default="가나다라마바사아자")
 
@@ -946,8 +973,7 @@ for r in rows:
     ws, we = speech_window(r["wav"])
     base = r["off"] + spec.NARR_PAD / 2
     a0, a1 = base + ws, base + we
-    bits = chunks(r["text"], *spec.NARR_CHUNK)
-    rec = ALIGN.get(f"n{nidx}")
+    bits, rec = narr_chunks(r["text"], nidx)       # rec 은 문구가 맞을 때만 (옛 전사 시각을 쓰지 않는다)
     spans = []
     if rec and len(rec) == len(bits):
         # ★전사에서 받은 실제 단어 시각. 빠진 칸은 앞뒤로 이어 메운다.
@@ -1033,6 +1059,17 @@ for _e in EFFECTS:
     if not _hit:
         print(f"  효과자막 '{_e[1]}' {_t:6.2f}초 → ★어느 컷에도 안 걸린다(영상 밖)")
 
+# ★넷플릭스 자막 규격 (2026-09-25 사용자 지시, docs/NETFLIX-자막규격.md) — 한 줄 · 0.83초 이상 ·
+#   줄 끝 . , 없음 · 말줄임표 …. 짧은 자막은 ① 뒤 빈 시간으로 늘리고 ② 0.10초 안에서 당기고
+#   ③ 이어진 옆 장과 한 줄로 합친다. 그래도 짧으면 규격 위반 칸에 띄운다.
+import netflix_sub as NF
+_nlog = []
+A = NF.fix_ass(A, TOTAL, NF.styles_fits(A, "fonts", spec.CAP_MAXW), _nlog)
+for _l in _nlog:
+    if _l.startswith("★"):
+        WARN.append("자막이 넷플릭스 규격보다 짧다 — " + _l[1:] + " (나레·대사 덩이를 손봐라)")
+    else:
+        print("  넷플릭스 규격: " + _l)
 open("captions.ass", "w", encoding="utf-8").write("\n".join(A) + "\n")
 ndlg = sum(1 for r in rows if r["kind"] == "D")
 print(f"  나레 자막 {nbits}덩이 · 대사 자막 {ndlgbits}덩이({ndlg}발화) · 효과자막 {nfx}장"

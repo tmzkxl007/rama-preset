@@ -10,7 +10,8 @@
   1. narr/n*.wav 를 사이에 묵음을 넣어 하나로 잇는다
   2. Speechmatics 로 한 번 전사한다 (편당 1건)
   3. 덩이(어절 묶음)마다 그 안에 든 단어의 시각을 찾아 narr_align.json 으로 남긴다
-  build.py 는 이 파일이 있으면 그 시각을 그대로 쓴다.
+  4. ★넷플릭스 자막 규격(2026-09-25): 0.83초 못 되는 덩이가 있으면 낱말 시각으로 다시 나눈다(netflix_sub.py)
+  build.py 는 이 파일이 있으면 그 덩이 글과 시각을 그대로 쓴다.
 """
 import io, json, os, re, subprocess, sys
 
@@ -44,6 +45,10 @@ def chunks(t, lo, hi):
     # ★숫자·수량 뒤에서 끊으면 "냉동식품 만 / 원어치" 처럼 갈라진다. 붙여 둔다.
     import re as _re
     HOLD = _re.compile(r"(?:[0-9]+|만|천|백|십|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)$")
+    # 뒤 명사·동사와 떼면 안 되는 말(관형사·부정어). 어절이 통째로 이것일 때만 본다
+    MODS = {"제", "그", "이", "저", "내", "네", "우리", "저희", "너희", "이런", "그런", "저런",
+            "어떤", "무슨", "몇", "모든", "온갖", "새", "헌", "옛", "첫", "각", "딴", "다른",
+            "여러", "어느", "웬", "그깟", "이깟", "안", "못"}
     out, cur = [], ""
     ws = t.split()
     for i, w in enumerate(ws):
@@ -51,6 +56,16 @@ def chunks(t, lo, hi):
         too_long = cur and len(cand.replace(" ", "")) > hi
         if too_long and HOLD.search(cur):      # 수량으로 끝나면 한 어절 더 붙인다
             too_long = False
+        if too_long and cur.split()[-1] in MODS:
+            # ★꾸미는 말·부정어로 끝나면 그 말을 다음 덩이로 넘긴다 — "기현을 제 / 집으로" ✗
+            #   "기현을 / 제 집으로" ○ (넷플릭스: 수식어와 명사, 부정어와 동사를 떼지 않는다)
+            head, last = cur.rsplit(" ", 1) if " " in cur else ("", cur)
+            if head:
+                out.append(head)
+                cur = (last + " " + w).strip()
+            else:
+                cur = cand                     # 꾸미는 말 한 어절뿐이면 붙여 둔다
+            continue
         if too_long:
             out.append(cur)
             cur = w
@@ -131,6 +146,12 @@ def norm(s):
 #   이제 쓴 글자와 전사 글자를 difflib 로 맞춰 놓고, 덩이의 글자 범위에
 #   해당하는 낱말을 집는다. 그래도 빈 덩이는 **앞뒤 사이를 글자 수로 나눠** 채운다.
 from difflib import SequenceMatcher
+import netflix_sub as NF
+
+# ★넷플릭스 자막 규격(2026-09-25) — 다시 나눈 나레 덩이가 한 줄 폭에 드는지 볼 함수.
+#   나레 글자크기는 build.py 가 잉크 높이로 정한다. 글자크기/잉크 실측: BM도현 1.22(89/73) · Gmarket 1.30(78/60)
+#   → 넉넉히 1.3배로 잰다(폭을 크게 잡는 쪽이라 한 줄을 넘칠 일이 없다).
+_fits = NF.width_fn(spec.FONT_NARR, spec.NARR_INK * 1.3, "fonts", spec.CAP_MAXW - 30)
 
 out = {}
 for i, (t, w, s0) in enumerate(zip(texts, wavs, starts), 1):
@@ -239,9 +260,19 @@ for i, (t, w, s0) in enumerate(zip(texts, wavs, starts), 1):
         res[q][1] = round(max(0.0, res[q][1]), 3)
         res[q][2] = round(res[q][2], 3)
 
+    # ★넷플릭스 자막 규격(2026-09-25, docs/NETFLIX-자막규격.md) — 0.83초 못 되는 덩이가 있거나
+    #   꾸미는 말 뒤에서 끊겼으면 **낱말 시각**으로 다시 나눈다. | 로 직접 자른 마디는 그대로 둔다.
+    if "|" not in t:
+        _wt = NF.word_times(t, words, s0, wdur)
+        _re = NF.resplit(_wt, [r[0] for r in res], res[0][1], res[-1][2], spec.NARR_CHUNK[1], _fits)
+        if _re and [x[0] for x in _re] != [r[0] for r in res]:
+            print(f"    n{i} 넷플릭스 규격으로 다시 나눔: " + " / ".join(r[0] for r in res)
+                  + "  →  " + " / ".join(x[0] for x in _re))
+            res = [[x[0], round(x[1], 3), round(x[2], 3)] for x in _re]
+
     out[f"n{i}"] = res
     got = sum(1 for r in res if r[1] is not None)
-    print(f"  n{i} {got}/{len(bits)}덩이  " +
+    print(f"  n{i} {got}/{len(res)}덩이  " +
           " / ".join(f"{r[0]}({r[1]}~{r[2]})" for r in res))
 
 json.dump(out, io.open("narr_align.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)

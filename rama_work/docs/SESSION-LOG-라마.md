@@ -69,3 +69,7 @@
 - 사용자 "어제 만든 영상에서 배경음악 좀 다 지워줘" → `scripts/devocal_src.py` 신설 + spec `BED_LIFT_DEVOCAL` + build 도장 분기. demucs 10편 차례로 → build 3개씩 병렬.
 - 6편(sb29~32·34·36) 규격 위반 0·씽크 0.02 안. 4편(sb28·33·35·37)은 synccheck 가 한 블록씩 1~2초로 오판 → 전날 검증본과 그림 동일·소리 시차 0.00 확인하고 납품(PLAYBOOK R-13).
 - 무음 비율 4.7%(sb36) ~ 23.5%(sb34).
+
+## 2026-09-25 — 넷플릭스 자막 규격 · 빌더 자동 적용 (새 편부터)
+- 규칙 문서 `docs/NETFLIX-자막규격.md` · 검사기 `scripts/netflix_sub_check.py` · 자막은 한 줄(spec `DLG_LINES`·`CAP_MAXLINES` = 1).
+- 포레이로와 같은 엔진 변경을 옮김(netflix_sub.py · chunks MODS · align resplit · build fix_ass). 이미 만든 편은 그대로(사용자 지시).
