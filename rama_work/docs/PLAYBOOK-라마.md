@@ -149,3 +149,17 @@ python -u presets\라마\build.py <편폴더>   # 도장이 있으면 BED_LIFT_D
 - **나레 컷 합 > 나레 길이면 컷을 빨리 돌린다**(sb40, 0초 컷 2배속).
 - 같은 shot 인데 조각마다 크롭이 달라 0.08~0.29초 튄다(sb46) — 굽고 나서 완성본 컷 간격을 재 0.3초 밑이면 그 shot 을 CROP_SHOT 한 값으로.
 - 엔진 숙제(그대로): multi_cut 경로 박힘 · tts 「130~380자」 옛 경고 · build 가 0.25초 밑 조각을 버리는 걸 검사로.
+
+## R-15. 흡연 장면만 모자이크 (2026-09-28 · sb34 · 사용자 "흡연하는 장면만, 담뱃갑은 가리지 마")
+
+```powershell
+# <편>/mosaic.json 을 손으로 쓴다(그림 칸 1080x1086 좌표 · 완성본 초) → 박스 계산 + 미리보기
+python scripts\mosaic_track.py <편> 4          # → <편>/mosaic_boxes.json · _mosaic/preview_*.jpg
+python -u presets\라마\build.py <편>           # body.mkv 직후 mosaic_apply.py 가 그 칸만 모자이크(자막은 안 먹힘)
+```
+- 항목 셋: `roi`(그 칸 안 흰 막대 자동 검출) · `seeds`(손으로 잡은 위치 사이 보간+템플릿 추적, `min_score 0.99` 면 보간만) · `box`(고정).
+- ★자동 검출만으로는 안 된다 — 귀에 꽂은 담배·손에 가린 담배를 놓치고, 담뱃갑 모서리를 담배로 잡는다. **담배마다 확대 격자(zoom)로 seeds 를 찍는 게 정확했다.**
+- ★모자이크 칸 `block` 14 는 약하다 — 가는 흰 담배가 비쳐 보였다. **28** 로 올렸다. 박스는 `pad 30 · min_box 64`.
+- build 가 모자이크 전 그림을 `_body_clean.mkv` 로 남긴다 — 다시 추적할 땐 그걸 쓴다(모자이크된 body.mkv 로 추적하면 망가진다).
+- 흡연 장면 = 입에 물기·불붙이기·피우기. 귀에 꽂은 담배·들고만 있기·건네기·담뱃갑·라이터는 가리지 않는다(사용자 결정).
+- 윈도 함정: cv2.imwrite 는 한글 경로에 못 쓴다(imencode 로) · 열린 VideoCapture 파일은 os.replace 로 못 바꾼다(release 먼저).

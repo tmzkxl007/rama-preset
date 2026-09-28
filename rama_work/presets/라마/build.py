@@ -659,6 +659,10 @@ subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", SRC, "-/filter_complex", "_
                 "-map", "[vo]", "-map", "[ao]", "-c:v", "libx264", "-crf", "15",
                 "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le",
                 "-f", "matroska", "body.mkv"], check=True)
+# ★부분 모자이크(담배 등) — scripts/mosaic_track.py 가 만든 mosaic_boxes.json 이 있으면
+#   자막을 얹기 전 그림 칸에만 건다(자막이 모자이크에 먹히지 않게). 2026-09-28 sb34.
+if os.path.exists("mosaic_boxes.json"):
+    subprocess.run([sys.executable, os.path.join(HERE, "mosaic_apply.py"), wd], check=True)
 
 # ── 5. 자막 (ASS) ───────────────────────────────────────
 PROBE_Y = 600
